@@ -110,10 +110,9 @@ def _render_reading_text(content: str) -> None:
     st.text(content)
 
 
-def _render_copy_button(content: str, label: str) -> None:
-    """Streamlit 기본 복사 기능을 사용해 브라우저별 권한 차이를 피한다."""
-    with st.popover(f"📋 {label}", use_container_width=True):
-        st.caption("아래 말씀 상자의 오른쪽 위 복사 아이콘을 누르세요.")
+def _render_copy_button(content: str, key: str) -> None:
+    """Streamlit의 클립보드 기능을 한 번 누르는 전체 너비 버튼으로 표시한다."""
+    with st.container(key=key):
         st.code(content, language=None, wrap_lines=True)
 
 
@@ -138,7 +137,7 @@ def _render_results(batch: BatchExtraction, requested_dates: Sequence[date]) -> 
             st.caption(f"출처: {source_url}")
             _render_copy_button(
                 build_date_txt_content((date_iso, source_url, readings)),
-                "이 날짜 본문 복사",
+                f"missa_copy_date_{date_iso.replace('-', '')}",
             )
             for label, content in readings.items():
                 st.markdown(f"#### {display_reading_label(label)}")
@@ -146,7 +145,8 @@ def _render_results(batch: BatchExtraction, requested_dates: Sequence[date]) -> 
 
     if batch.results:
         st.subheader("복사 또는 다운로드")
-        _render_copy_button(build_txt_content(batch.results), "전체 본문 복사")
+        if success_count > 1:
+            _render_copy_button(build_txt_content(batch.results), "missa_copy_all")
         st.download_button(
             "TXT 파일 다운로드",
             data=build_txt_bytes(batch.results),
@@ -173,11 +173,62 @@ def main() -> None:
             font-size: 1rem;
             line-height: 1.75;
         }
-        [data-testid="stCode"] div:has([data-testid="stElementToolbarButton"]),
-        [data-testid="stCode"] [data-testid="stElementToolbarButton"] {
+        [class*="st-key-missa_copy_"] [data-testid="stCode"] {
+            min-height: 46px;
+            padding: 0 !important;
+            border: 0 !important;
+            background: transparent !important;
+        }
+        [class*="st-key-missa_copy_"] [data-testid="stCode"] pre {
+            display: none !important;
+        }
+        [class*="st-key-missa_copy_"] [data-testid="stCode"] div:has([data-testid="stElementToolbarButton"]),
+        [class*="st-key-missa_copy_"] [data-testid="stCode"] div:has(> [data-testid="stCodeCopyButton"]),
+        [class*="st-key-missa_copy_"] [data-testid="stElementToolbarButton"],
+        [class*="st-key-missa_copy_"] [data-testid="stTooltipHoverTarget"],
+        [class*="st-key-missa_copy_"] [data-testid="stCodeCopyButton"] {
+            position: static !important;
+            width: 100% !important;
+            min-height: 44px !important;
+            height: auto !important;
+            inset: auto !important;
+            transform: none !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
             opacity: 1 !important;
             visibility: visible !important;
             pointer-events: auto !important;
+        }
+        [class*="st-key-missa_copy_"] [data-testid="stCodeCopyButton"],
+        [class*="st-key-missa_copy_"] button[aria-label="Copy to clipboard"],
+        [class*="st-key-missa_copy_"] button[aria-label="Copied!"] {
+            width: 100% !important;
+            min-height: 44px !important;
+            position: static !important;
+            border: 1px solid #c9cdd3 !important;
+            border-radius: 0.55rem !important;
+            background: #fff !important;
+            color: #202124 !important;
+            font-size: 1rem !important;
+            font-weight: 600 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            pointer-events: auto !important;
+        }
+        [class*="st-key-missa_copy_date_"] button::after {
+            content: "이 날짜 본문 전체 복사";
+            margin-left: 0.45rem;
+        }
+        .st-key-missa_copy_all button::after {
+            content: "모든 날짜 본문 전체 복사";
+            margin-left: 0.45rem;
+        }
+        [class*="st-key-missa_copy_"] button[aria-label="Copied!"]::after {
+            content: "복사되었습니다";
         }
         @media (max-width: 640px) {
             .block-container {padding: 1.25rem 1rem 2rem;}
