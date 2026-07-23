@@ -149,42 +149,73 @@ def _copy_button_html(content: str, label: str) -> str:
         const button = document.getElementById("copy-button");
         const originalLabel = button.textContent;
 
-        function fallbackCopy(text) {{
-          const area = document.createElement("textarea");
+        function fallbackCopy(text, targetDocument) {{
+          const area = targetDocument.createElement("textarea");
           area.value = text;
           area.setAttribute("readonly", "");
           area.style.position = "fixed";
           area.style.opacity = "0";
-          document.body.appendChild(area);
+          targetDocument.body.appendChild(area);
           area.select();
           area.setSelectionRange(0, area.value.length);
-          const copied = document.execCommand("copy");
-          document.body.removeChild(area);
+          const copied = targetDocument.execCommand("copy");
+          targetDocument.body.removeChild(area);
           if (!copied) throw new Error("copy failed");
         }}
 
-        button.addEventListener("click", async () => {{
-          try {{
-            if (navigator.clipboard && window.isSecureContext) {{
-              const clipboardWrite = navigator.clipboard.writeText(textToCopy);
+        function copyTargets() {{
+          const clipboards = [];
+          const documents = [];
+          for (const candidate of [window.top, window.parent, window]) {{
+            try {{
+              if (candidate.navigator.clipboard && !clipboards.includes(candidate.navigator.clipboard)) {{
+                clipboards.push(candidate.navigator.clipboard);
+              }}
+              if (candidate.document && !documents.includes(candidate.document)) {{
+                documents.push(candidate.document);
+              }}
+            }} catch (error) {{
+              // 다른 출처의 상위 창은 접근하지 않고 다음 방식을 시도한다.
+            }}
+          }}
+          return {{ clipboards, documents }};
+        }}
+
+        async function copyText(text) {{
+          const targets = copyTargets();
+          for (const clipboard of targets.clipboards) {{
+            try {{
+              const clipboardWrite = clipboard.writeText(text);
               const timeout = new Promise((resolve, reject) =>
-                window.setTimeout(() => reject(new Error("clipboard timeout")), 800)
+                window.setTimeout(() => reject(new Error("clipboard timeout")), 600)
               );
               await Promise.race([clipboardWrite, timeout]);
-            }} else {{
-              fallbackCopy(textToCopy);
+              return;
+            }} catch (error) {{
+              // 권한이 없는 프레임은 건너뛰고 다음 클립보드를 시도한다.
             }}
+          }}
+
+          for (const targetDocument of targets.documents) {{
+            try {{
+              fallbackCopy(text, targetDocument);
+              return;
+            }} catch (error) {{
+              // 지원되지 않는 문서는 건너뛴다.
+            }}
+          }}
+          throw new Error("copy failed");
+        }}
+
+        button.addEventListener("click", async () => {{
+          button.textContent = "복사 중…";
+          try {{
+            await copyText(textToCopy);
             button.textContent = "✓ 복사되었습니다";
             button.className = "copied";
           }} catch (error) {{
-            try {{
-              fallbackCopy(textToCopy);
-              button.textContent = "✓ 복사되었습니다";
-              button.className = "copied";
-            }} catch (fallbackError) {{
-              button.textContent = "복사하지 못했습니다. 다시 눌러주세요";
-              button.className = "failed";
-            }}
+            button.textContent = "복사하지 못했습니다. 다시 눌러주세요";
+            button.className = "failed";
           }}
           window.setTimeout(() => {{
             button.textContent = originalLabel;
