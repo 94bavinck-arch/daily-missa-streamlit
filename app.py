@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import html
-import json
 from datetime import date
 from typing import Sequence
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 from missa_extract import ExtractionResult
 from missa_web import (
@@ -113,123 +110,11 @@ def _render_reading_text(content: str) -> None:
     st.text(content)
 
 
-def _copy_button_html(content: str, label: str) -> str:
-    """클립보드 API와 구형 브라우저 대체 방식을 함께 쓰는 복사 버튼 HTML."""
-    safe_content = (
-        json.dumps(content, ensure_ascii=False)
-        .replace("<", "\\u003c")
-        .replace(">", "\\u003e")
-        .replace("&", "\\u0026")
-    )
-    safe_label = html.escape(label)
-    return f"""
-    <!doctype html>
-    <html lang="ko">
-    <head>
-      <meta charset="utf-8">
-      <style>
-        * {{ box-sizing: border-box; }}
-        body {{ margin: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }}
-        button {{
-          width: 100%; min-height: 44px; padding: 0.65rem 1rem;
-          border: 1px solid #c9cdd3; border-radius: 0.55rem;
-          background: #fff; color: #202124; font-size: 1rem;
-          font-weight: 600; cursor: pointer;
-        }}
-        button:hover {{ border-color: #6b7280; background: #f7f8fa; }}
-        button:focus-visible {{ outline: 3px solid #9bc5ff; outline-offset: 2px; }}
-        button.copied {{ border-color: #198754; color: #13733f; background: #eef9f1; }}
-        button.failed {{ border-color: #c0392b; color: #a52a20; background: #fff4f2; }}
-      </style>
-    </head>
-    <body>
-      <button type="button" id="copy-button" aria-live="polite">📋 {safe_label}</button>
-      <script>
-        const textToCopy = {safe_content};
-        const button = document.getElementById("copy-button");
-        const originalLabel = button.textContent;
-
-        function fallbackCopy(text, targetDocument) {{
-          const area = targetDocument.createElement("textarea");
-          area.value = text;
-          area.setAttribute("readonly", "");
-          area.style.position = "fixed";
-          area.style.opacity = "0";
-          targetDocument.body.appendChild(area);
-          area.select();
-          area.setSelectionRange(0, area.value.length);
-          const copied = targetDocument.execCommand("copy");
-          targetDocument.body.removeChild(area);
-          if (!copied) throw new Error("copy failed");
-        }}
-
-        function copyTargets() {{
-          const clipboards = [];
-          const documents = [];
-          for (const candidate of [window.top, window.parent, window]) {{
-            try {{
-              if (candidate.navigator.clipboard && !clipboards.includes(candidate.navigator.clipboard)) {{
-                clipboards.push(candidate.navigator.clipboard);
-              }}
-              if (candidate.document && !documents.includes(candidate.document)) {{
-                documents.push(candidate.document);
-              }}
-            }} catch (error) {{
-              // 다른 출처의 상위 창은 접근하지 않고 다음 방식을 시도한다.
-            }}
-          }}
-          return {{ clipboards, documents }};
-        }}
-
-        async function copyText(text) {{
-          const targets = copyTargets();
-          for (const clipboard of targets.clipboards) {{
-            try {{
-              const clipboardWrite = clipboard.writeText(text);
-              const timeout = new Promise((resolve, reject) =>
-                window.setTimeout(() => reject(new Error("clipboard timeout")), 600)
-              );
-              await Promise.race([clipboardWrite, timeout]);
-              return;
-            }} catch (error) {{
-              // 권한이 없는 프레임은 건너뛰고 다음 클립보드를 시도한다.
-            }}
-          }}
-
-          for (const targetDocument of targets.documents) {{
-            try {{
-              fallbackCopy(text, targetDocument);
-              return;
-            }} catch (error) {{
-              // 지원되지 않는 문서는 건너뛴다.
-            }}
-          }}
-          throw new Error("copy failed");
-        }}
-
-        button.addEventListener("click", async () => {{
-          button.textContent = "복사 중…";
-          try {{
-            await copyText(textToCopy);
-            button.textContent = "✓ 복사되었습니다";
-            button.className = "copied";
-          }} catch (error) {{
-            button.textContent = "복사하지 못했습니다. 다시 눌러주세요";
-            button.className = "failed";
-          }}
-          window.setTimeout(() => {{
-            button.textContent = originalLabel;
-            button.className = "";
-          }}, 2200);
-        }});
-      </script>
-    </body>
-    </html>
-    """
-
-
 def _render_copy_button(content: str, label: str) -> None:
-    components.html(_copy_button_html(content, label), height=54, scrolling=False)
+    """Streamlit 기본 복사 기능을 사용해 브라우저별 권한 차이를 피한다."""
+    with st.popover(f"📋 {label}", use_container_width=True):
+        st.caption("아래 말씀 상자의 오른쪽 위 복사 아이콘을 누르세요.")
+        st.code(content, language=None, wrap_lines=True)
 
 
 def _render_results(batch: BatchExtraction, requested_dates: Sequence[date]) -> None:
