@@ -3,6 +3,7 @@ from datetime import date, datetime, timezone
 
 from missa_web import (
     DateRangeError,
+    build_date_txt_content,
     build_txt_bytes,
     build_txt_content,
     collect_readings,
@@ -80,6 +81,20 @@ class DownloadTests(unittest.TestCase):
         self.assertIn("제1독서\n" + FIRST, content)
         self.assertIn("복음\n" + GOSPEL, content)
         self.assertNotIn("제2독서", content)
+
+    def test_single_date_copy_content_matches_download_block(self):
+        result = (
+            "2026-07-22",
+            "https://example.test/20260722",
+            {"제1독서": FIRST, "복음": GOSPEL},
+        )
+
+        copy_content = build_date_txt_content(result)
+
+        self.assertEqual(copy_content + "\n", build_txt_content([result]))
+        self.assertTrue(copy_content.startswith("2026년 7월 22일\n"))
+        self.assertIn("제1독서\n" + FIRST, copy_content)
+        self.assertIn("복음\n" + GOSPEL, copy_content)
 
     def test_txt_content_includes_multiple_alternatives_in_order(self):
         results = [

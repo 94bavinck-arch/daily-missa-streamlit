@@ -2,17 +2,22 @@
 
 from __future__ import annotations
 
+import html
+import json
 from datetime import date
 from typing import Sequence
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from missa_extract import ExtractionResult
 from missa_web import (
     QUICK_DATE_OPTIONS,
     BatchExtraction,
     DateRangeError,
+    build_date_txt_content,
     build_txt_bytes,
+    build_txt_content,
     collect_readings,
     display_reading_label,
     format_korean_date,
@@ -108,6 +113,94 @@ def _render_reading_text(content: str) -> None:
     st.text(content)
 
 
+def _copy_button_html(content: str, label: str) -> str:
+    """클립보드 API와 구형 브라우저 대체 방식을 함께 쓰는 복사 버튼 HTML."""
+    safe_content = (
+        json.dumps(content, ensure_ascii=False)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
+    safe_label = html.escape(label)
+    return f"""
+    <!doctype html>
+    <html lang="ko">
+    <head>
+      <meta charset="utf-8">
+      <style>
+        * {{ box-sizing: border-box; }}
+        body {{ margin: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }}
+        button {{
+          width: 100%; min-height: 44px; padding: 0.65rem 1rem;
+          border: 1px solid #c9cdd3; border-radius: 0.55rem;
+          background: #fff; color: #202124; font-size: 1rem;
+          font-weight: 600; cursor: pointer;
+        }}
+        button:hover {{ border-color: #6b7280; background: #f7f8fa; }}
+        button:focus-visible {{ outline: 3px solid #9bc5ff; outline-offset: 2px; }}
+        button.copied {{ border-color: #198754; color: #13733f; background: #eef9f1; }}
+        button.failed {{ border-color: #c0392b; color: #a52a20; background: #fff4f2; }}
+      </style>
+    </head>
+    <body>
+      <button type="button" id="copy-button" aria-live="polite">📋 {safe_label}</button>
+      <script>
+        const textToCopy = {safe_content};
+        const button = document.getElementById("copy-button");
+        const originalLabel = button.textContent;
+
+        function fallbackCopy(text) {{
+          const area = document.createElement("textarea");
+          area.value = text;
+          area.setAttribute("readonly", "");
+          area.style.position = "fixed";
+          area.style.opacity = "0";
+          document.body.appendChild(area);
+          area.select();
+          area.setSelectionRange(0, area.value.length);
+          const copied = document.execCommand("copy");
+          document.body.removeChild(area);
+          if (!copied) throw new Error("copy failed");
+        }}
+
+        button.addEventListener("click", async () => {{
+          try {{
+            if (navigator.clipboard && window.isSecureContext) {{
+              const clipboardWrite = navigator.clipboard.writeText(textToCopy);
+              const timeout = new Promise((resolve, reject) =>
+                window.setTimeout(() => reject(new Error("clipboard timeout")), 800)
+              );
+              await Promise.race([clipboardWrite, timeout]);
+            }} else {{
+              fallbackCopy(textToCopy);
+            }}
+            button.textContent = "✓ 복사되었습니다";
+            button.className = "copied";
+          }} catch (error) {{
+            try {{
+              fallbackCopy(textToCopy);
+              button.textContent = "✓ 복사되었습니다";
+              button.className = "copied";
+            }} catch (fallbackError) {{
+              button.textContent = "복사하지 못했습니다. 다시 눌러주세요";
+              button.className = "failed";
+            }}
+          }}
+          window.setTimeout(() => {{
+            button.textContent = originalLabel;
+            button.className = "";
+          }}, 2200);
+        }});
+      </script>
+    </body>
+    </html>
+    """
+
+
+def _render_copy_button(content: str, label: str) -> None:
+    components.html(_copy_button_html(content, label), height=54, scrolling=False)
+
+
 def _render_results(batch: BatchExtraction, requested_dates: Sequence[date]) -> None:
     st.divider()
     success_count = len(batch.results)
@@ -127,11 +220,17 @@ def _render_results(batch: BatchExtraction, requested_dates: Sequence[date]) -> 
     for date_iso, source_url, readings in batch.results:
         with st.expander(format_korean_date(date_iso), expanded=success_count == 1):
             st.caption(f"출처: {source_url}")
+            _render_copy_button(
+                build_date_txt_content((date_iso, source_url, readings)),
+                "이 날짜 본문 복사",
+            )
             for label, content in readings.items():
                 st.markdown(f"#### {display_reading_label(label)}")
                 _render_reading_text(content)
 
     if batch.results:
+        st.subheader("복사 또는 다운로드")
+        _render_copy_button(build_txt_content(batch.results), "전체 본문 복사")
         st.download_button(
             "TXT 파일 다운로드",
             data=build_txt_bytes(batch.results),

@@ -123,20 +123,23 @@ def format_korean_date(date_iso: str) -> str:
     return f"{parsed.year}년 {parsed.month}월 {parsed.day}일"
 
 
+def build_date_txt_content(result: ExtractionResult) -> str:
+    """한 날짜의 날짜·독서 제목·원문을 복사/다운로드용 텍스트로 조립한다."""
+    date_iso, _url, readings = result
+    divider = "=" * 50
+    reading_blocks = [
+        f"{display_reading_label(label)}\n{content}"
+        for label, content in readings.items()
+    ]
+    return (
+        f"{format_korean_date(date_iso)}\n{divider}\n\n"
+        + "\n\n\n".join(reading_blocks)
+    ).rstrip()
+
+
 def build_txt_content(results: Sequence[ExtractionResult]) -> str:
     """성공한 날짜들을 UTF-8 다운로드용 일반 텍스트로 조립한다."""
-    date_blocks: List[str] = []
-    divider = "=" * 50
-
-    for date_iso, _url, readings in results:
-        reading_blocks = [
-            f"{display_reading_label(label)}\n{content}"
-            for label, content in readings.items()
-        ]
-        date_blocks.append(
-            f"{format_korean_date(date_iso)}\n{divider}\n\n"
-            + "\n\n\n".join(reading_blocks)
-        )
+    date_blocks = [build_date_txt_content(result) for result in results]
 
     return "\n\n\n".join(date_blocks).rstrip() + ("\n" if date_blocks else "")
 
