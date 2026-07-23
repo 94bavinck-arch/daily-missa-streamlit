@@ -173,6 +173,12 @@ def main() -> None:
             font-size: 1rem;
             line-height: 1.75;
         }
+        [data-testid="stCode"] div:has([data-testid="stElementToolbarButton"]),
+        [data-testid="stCode"] [data-testid="stElementToolbarButton"] {
+            opacity: 1 !important;
+            visibility: visible !important;
+            pointer-events: auto !important;
+        }
         @media (max-width: 640px) {
             .block-container {padding: 1.25rem 1rem 2rem;}
             h1 {font-size: 1.8rem !important;}
